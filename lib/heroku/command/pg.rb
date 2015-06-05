@@ -78,46 +78,57 @@ class Heroku::Command::Pg < Heroku::Command::Base
     puts
   end
 
-  # pg:fdw <list|unlink|link> <DATABASE>
+  # pg:links <create|destroy>
   #
-  #  Manage FDW links for <DATABASE>
-  #  list   # List existing links
-  #  unlink # Delete an existing link
-  #    -l, --link <ID> # Link identifier
-  #  link   # Create a new link
-  #    -t, --target <TARGET> # Link target
+  #  Create links between data stores.  Without a subcommand, it lists all
+  #  databases and information on the link.
   #
-  def fdw
-    mode = shift_argument || ''
+  #  create <SOURCE> <TARGET> # Create a data link
+  #    --as <LINK> # override the default link name
+  #  destroy <SOURCE> <LINK> # Destroy a data link between a source and target
+  #
+  def links
+    mode = shift_argument || 'list'
 
-    db = shift_argument
-    if mode.nil? || !(%w[list unlink link].include?(mode))
+    if !(%w(list create destroy).include?(mode))
       Heroku::Command.run(current_command, ["--help"])
       exit(1)
     end
 
-    attachment = generate_resolver.resolve(db, "DATABASE_URL")
+    # db = shift_argument
+    # attachment = generate_resolver.resolve(db, "DATABASE_URL")
 
     case mode
     when 'list'
-      response = hpg_client(attachment).fdw_list()
-      if response.empty?
-        output_with_bang("No links found for this database.")
+      db = shift_argument
+      resolver = generate_resolver
+
+      if db
+        dbs = [resolver.resolve(db, "DATABASE_URL")]
       else
-        styled_header(attachment.display_name)
-        response.each do |link|
-          display "\n==== #{link[:id]}"
-          link[:created] = time_format(link[:created_at])
-          link.reject! { |k,_| [:id, :created_at].include?(k) }
-          styled_hash(Hash[link.map {|k, v| [humanize(k), v] }])
+        dbs = resolver.all_databases
+      end
+
+      dbs.each do |attachment|
+        response = hpg_client(attachment).fdw_list()
+        if response.empty?
+          output_with_bang("No data sources are linked into this database.")
+        else
+          styled_header(attachment.display_name)
+          response.each do |link|
+            display "\n==== #{link[:id]}"
+            link[:created] = time_format(link[:created_at])
+            link.reject! { |k,_| [:id, :created_at].include?(k) }
+            styled_hash(Hash[link.map {|k, v| [humanize(k), v] }])
+          end
         end
       end
-    when 'link'
+    when 'create'
       output_with_bang("No target specified.") if options[:target].nil?
       target = resolve_db_or_url(options[:target])
       response = hpg_client(attachment).fdw_set(target.url)
       display("New link successfully created.")
-    when 'unlink'
+    when 'destroy'
       output_with_bang("No link specified.") if options[:link].nil?
       hpg_client(attachment).fdw_delete(options[:link])
       display("Link successfully removed.")
@@ -783,4 +794,3 @@ your reply. Default is "no".
     end
   end
 end
-
