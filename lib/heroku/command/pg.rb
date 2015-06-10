@@ -109,12 +109,12 @@ class Heroku::Command::Pg < Heroku::Command::Base
         dbs = resolver.all_databases
       end
 
-      dbs.each do |attachment|
+      dbs.each do |name, attachment|
         response = hpg_client(attachment).fdw_list()
+        styled_header("#{attachment.display_name} (#{attachment.resource_name})")
         if response.empty?
           output_with_bang("No data sources are linked into this database.")
         else
-          styled_header(attachment.display_name)
           response.each do |link|
             display "\n==== #{link[:id]}"
             link[:created] = time_format(link[:created_at])
