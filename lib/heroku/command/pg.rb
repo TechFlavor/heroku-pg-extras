@@ -139,15 +139,13 @@ class Heroku::Command::Pg < Heroku::Command::Base
       source = shift_argument
       link = shift_argument
 
-      if link.nil?
-        source_attachment = generate_resolver.resolve("DATABASE_URL")
-        link = source
-      else
-        source_attachment = generate_resolver.resolve(source, "DATABASE_URL")
-      end
+      error("No source specified.") unless source
+      error("No link specified.") unless link
 
-      output_with_bang("No link specified.") if link.nil?
+      source_attachment = generate_resolver.resolve(source, "DATABASE_URL")
+
       hpg_client(source_attachment).fdw_delete(link)
+
       display("Link successfully removed.")
     end
   end
