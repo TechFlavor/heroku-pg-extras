@@ -103,21 +103,26 @@ class Heroku::Command::Pg < Heroku::Command::Base
       if db
         dbs = [resolver.resolve(db, "DATABASE_URL")]
       else
-        dbs = resolver.all_databases
+        dbs = resolver.all_databases.values
       end
 
-      dbs.each do |name, attachment|
-        response = hpg_client(attachment).fdw_list()
+      error("No database attached to this app.") if dbs.compact.empty?
+
+      dbs.each do |attachment|
+        response = hpg_client(attachment).fdw_list
         styled_header("#{attachment.display_name} (#{attachment.resource_name})")
+
         if response.empty?
           output_with_bang("No data sources are linked into this database.")
-        else
-          response.each do |link|
-            display "\n==== #{link[:id]}"
-            link[:created] = time_format(link[:created_at])
-            link.reject! { |k,_| [:id, :created_at].include?(k) }
-            styled_hash(Hash[link.map {|k, v| [humanize(k), v] }])
-          end
+          return
+        end
+
+        response.each do |link|
+          display "\n==== #{link[:name]}"
+
+          link[:created] = time_format(link[:created_at])
+          link.reject! { |k,_| [:id, :created_at, :name].include?(k) }
+          styled_hash(Hash[link.map {|k, v| [humanize(k), v] }])
         end
       end
     when 'create'
