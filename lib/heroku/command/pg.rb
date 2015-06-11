@@ -95,9 +95,6 @@ class Heroku::Command::Pg < Heroku::Command::Base
       exit(1)
     end
 
-    # db = shift_argument
-    # attachment = generate_resolver.resolve(db, "DATABASE_URL")
-
     case mode
     when 'list'
       db = shift_argument
@@ -124,13 +121,34 @@ class Heroku::Command::Pg < Heroku::Command::Base
         end
       end
     when 'create'
-      output_with_bang("No target specified.") if options[:target].nil?
-      target = resolve_db_or_url(options[:target])
-      response = hpg_client(attachment).fdw_set(target.url)
+      source = shift_argument
+      target = shift_argument
+
+      if target.nil?
+        source_attachment = generate_resolver.resolve("DATABASE_URL")
+        target_attachment = generate_resolver.resolve(source)
+      else
+        source_attachment = generate_resolver.resolve(source, "DATABASE_URL")
+        target_attachment = generate_resolver.resolve(target)
+      end
+
+      output_with_bang("No target specified.") if target_attachment.nil?
+      response = hpg_client(source_attachment).fdw_set(target_attachment.url, options[:as])
+
       display("New link successfully created.")
     when 'destroy'
-      output_with_bang("No link specified.") if options[:link].nil?
-      hpg_client(attachment).fdw_delete(options[:link])
+      source = shift_argument
+      link = shift_argument
+
+      if link.nil?
+        source_attachment = generate_resolver.resolve("DATABASE_URL")
+        link = source
+      else
+        source_attachment = generate_resolver.resolve(source, "DATABASE_URL")
+      end
+
+      output_with_bang("No link specified.") if link.nil?
+      hpg_client(source_attachment).fdw_delete(link)
       display("Link successfully removed.")
     end
   end
