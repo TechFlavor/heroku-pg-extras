@@ -124,15 +124,14 @@ class Heroku::Command::Pg < Heroku::Command::Base
       source = shift_argument
       target = shift_argument
 
-      if target.nil?
-        source_attachment = generate_resolver.resolve("DATABASE_URL")
-        target_attachment = generate_resolver.resolve(source)
-      else
-        source_attachment = generate_resolver.resolve(source, "DATABASE_URL")
-        target_attachment = generate_resolver.resolve(target)
-      end
+      error("Usage links <SOURCE> <TARGET>") unless [source, target].all?
 
-      output_with_bang("No target specified.") if target_attachment.nil?
+      source_attachment = generate_resolver.resolve(source, "DATABASE_URL")
+      target_attachment = resolve_db_or_url(target)
+
+      output_with_bang("No source specified.") unless source_attachment
+      output_with_bang("No target specified.") unless target_attachment
+
       response = hpg_client(source_attachment).fdw_set(target_attachment.url, options[:as])
 
       display("New link successfully created.")
@@ -765,9 +764,13 @@ your reply. Default is "no".
       name = url_name(uri)
       MaybeAttachment.new(name, url, nil)
     else
-      attachment = generate_resolver.resolve(name_or_url, default)
-      name = attachment.config_var.sub(/^HEROKU_(POSTGRESQL|REDIS)_/, '').sub(/_URL$/, '')
-      MaybeAttachment.new(name, attachment.url, attachment)
+      attachment_name = name_or_url || default
+      attachment = (resolve_addon(attachment_name) || []).first
+
+      error("Target could not be found.") unless attachment
+      error("Target is invalid.") unless attachment['addon_service']['name'] =~ /heroku-(redis|postgresql)/
+
+      MaybeAttachment.new(attachment_name, get_config_var(attachment['config_vars'].first), attachment)
     end
   end
 
@@ -810,5 +813,10 @@ your reply. Default is "no".
     else
       column
     end
+  end
+
+  def get_config_var(name)
+    res = api.get_config_vars(app)
+    res.data[:body][name]
   end
 end
